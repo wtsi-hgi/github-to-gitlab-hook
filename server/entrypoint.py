@@ -20,8 +20,8 @@ Entry point for the handling of GitHub pushes.
 from bottle import route, run
 
 
-@route('/')
-def handle_githut_push():
+@route('/', method='POST')
+def handle_github_push():
     return "Hello world"
 
 
