@@ -15,20 +15,6 @@ You should have received a copy of the GNU General Public License along
 with this program. If not, see <http://www.gnu.org/licenses/>.
 """
 """
-Entry point for the handling of GitHub pushes.
+Parse the GitHub POST request.
 """
-from bottle import request, response, Bottle
 
-app = Bottle()
-
-
-@app.route('/', method='POST')
-def receive_github_push():
-    return 'SUCCESS'
-
-
-def run_server():
-    app.run(host='0.0.0.0', port=8080, debug=True)  # Built-in Bottle development server.
-
-if __name__ == '__main__':
-    run_server()
