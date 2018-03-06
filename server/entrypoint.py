@@ -26,8 +26,8 @@ def handle_githut_push():
 
 
 def main():
-    run(host='172.27.95.35', port=80)
-    #run(host='localhost', port=8080) # Built-in test server.
+    #run(host='172.27.95.35', port=80)
+    run(host='localhost', port=80) # Built-in test server.
 
 if __name__ == '__main__':
     main()
