@@ -20,7 +20,7 @@ setup(name="git-to-gitlab-hook",
       install_requires=open("requirements.txt", "r").readlines(),
       entry_points={
           "console_scripts": [
-              "git-to-gitlab-hook=git-to-gitlab-hook.entrypoint:run"
+              "git-to-gitlab-hook=server.entrypoint:main"
           ]
       },
       zip_safe=True)
