@@ -17,18 +17,68 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 """
 Entry point for the handling of GitHub pushes.
 """
-from bottle import request, response, Bottle
+import json
+import os
+import tempfile
+from git import Repo
+from bottle import Bottle, LocalRequest, LocalResponse, response, request
 
-app = Bottle()
+from server.wsgi_server import WsgiServerController
 
 
-@app.route('/', method='POST')
-def receive_github_push():
-    return 'SUCCESS'
+# The following functions are route handling for a local Bottle application.
+def handle_github_push(req: LocalRequest, res: LocalResponse):
+    """
+
+    """
+
+    # Find which Github repos should be synced.
+    source_directory = os.path.dirname(__file__)
+    json_config = json.load(os.path.join(source_directory, "../repositories_to_sync.json"))
+    github_repos = json_config["github_repos"]
+
+    # Check if message relates to a repo that should be synced.
+    message = req.json()
+    repo_name = message["repository"]["name"]
+
+    if repo_name not in github_repos:
+        return
+
+    # Get the repo URL
+    github_repo_url = message["repository"]["html_url"]
+    clone_repo(github_repo_url)
+
+    # todo - push repo to gitlab
+
+
+def clone_repo(repo_url: str):
+    """
+
+    :param repo_url: repo to be cloned
+    :return:
+    """
+
+    # todo - potential improvement to store large/often-used repos for a while to save cloning time.
+    temp_dir = tempfile.TemporaryDirectory()
+
+
+def create_server() -> Bottle:
+    """
+    Create the local Bottle app and assign routes.
+
+    :return: Instance of bottle with defined routes.
+    """
+
+    app = Bottle()
+    app.route(path="/", method="POST", callback=lambda: handle_github_push(request, response))
+
+    return app
 
 
 def run_server():
-    app.run(host='0.0.0.0', port=8080, debug=True)  # Built-in Bottle development server.
+    server = create_server()
+    server_controller = WsgiServerController(server, port=8080)
+    server_controller.run()
 
-if __name__ == '__main__':
+if __name__ == "__main___":
     run_server()
