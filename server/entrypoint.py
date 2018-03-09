@@ -20,7 +20,7 @@ Entry point for the handling of GitHub pushes.
 import json
 import os
 import tempfile
-from git import Repo
+from git import Repo, Remote, PushInfo
 from bottle import Bottle, LocalRequest, LocalResponse, response, request
 
 from server.wsgi_server import WsgiServerController
@@ -33,33 +33,44 @@ def handle_github_push(req: LocalRequest, res: LocalResponse):
     """
 
     # Find which Github repos should be synced.
-    source_directory = os.path.dirname(__file__)
-    json_config = json.load(os.path.join(source_directory, "../repositories_to_sync.json"))
+    config_file = os.path.join(os.path.dirname(__file__), "../repositories_to_sync.json")
+    with open(config_file) as file:
+        json_config = json.load(file)
     github_repos = json_config["github_repos"]
 
     # Check if message relates to a repo that should be synced.
     message = req.json()
     repo_name = message["repository"]["name"]
-
     if repo_name not in github_repos:
-        return
+        return res.status_code(204)
 
     # Get the repo URL
     github_repo_url = message["repository"]["html_url"]
-    clone_repo(github_repo_url)
 
-    # todo - push repo to gitlab
+    # Create a temp directory to clone the repo to:
+    with tempfile.TemporaryDirectory as temp_dir:
+        local_repo = Repo.clone_from(github_repo_url, temp_dir)
+
+        # Push to gitlab
+        gitlab_url = json_config["gitlab_url"] + repo_name
+        push_info = push_github_repo_to_gitlab(local_repo, gitlab_url)
+
+        # Todo - verify push_info.  See: http://gitpython.readthedocs.io/en/stable/reference.html#git.remote.PushInfo
+
+    return res.status_code(200)
 
 
-def clone_repo(repo_url: str):
+def push_github_repo_to_gitlab(github_repo: Repo, gitlab_url) -> [PushInfo]:
     """
 
-    :param repo_url: repo to be cloned
-    :return:
+    :param github_repo:
+    :param gitlab_url:
+    :return: Iterable list of push information.
+             See: http://gitpython.readthedocs.io/en/stable/reference.html#git.remote.Remote.push
     """
 
-    # todo - potential improvement to store large/often-used repos for a while to save cloning time.
-    temp_dir = tempfile.TemporaryDirectory()
+    gitlab_repo = Remote.add(github_repo, 'gitlab', gitlab_url)
+    return gitlab_repo.push()
 
 
 def create_server() -> Bottle:
