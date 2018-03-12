@@ -20,10 +20,21 @@ Entry point for the handling of GitHub pushes.
 import json
 import os
 import tempfile
+import bottle
 from git import Repo, Remote, PushInfo
 from bottle import Bottle, LocalRequest, LocalResponse, response, request
 
 from server.wsgi_server import WsgiServerController
+
+
+def load_config(path: os.path):
+    """
+
+    :return:
+    """
+    with open(path) as file:
+        json_config = json.load(file)
+    return json_config
 
 
 # The following functions are route handling for a local Bottle application.
@@ -33,34 +44,31 @@ def handle_github_push(req: LocalRequest, res: LocalResponse):
     """
 
     # Find which Github repos should be synced.
-    config_file = os.path.join(os.path.dirname(__file__), "../repositories_to_sync.json")
-    with open(config_file) as file:
-        json_config = json.load(file)
-    github_repos = json_config["github_repos"]
+    config = load_config(os.path.join(os.path.dirname(__file__), "../repositories_to_sync.json"))
+    github_repos = config["github_repos"]
 
     # Check if message relates to a repo that should be synced.
-    message = req.json()
+    message = json.loads(req.json)
     repo_name = message["repository"]["name"]
     if repo_name not in github_repos:
-        return res.status_code(204)
+        bottle.abort(404, "Repo not under GitLib")
 
     # Get the repo URL
-    github_repo_url = message["repository"]["html_url"]
+    github_repo_url = message["repository"]["url"]
 
     # Create a temp directory to clone the repo to:
-    with tempfile.TemporaryDirectory as temp_dir:
+    with tempfile.TemporaryDirectory() as temp_dir:
         local_repo = Repo.clone_from(github_repo_url, temp_dir)
 
         # Push to gitlab
-        gitlab_url = json_config["gitlab_url"] + repo_name
+        gitlab_url = config["gitlab_url"] + repo_name
         push_info = push_github_repo_to_gitlab(local_repo, gitlab_url)
-
         # Todo - verify push_info.  See: http://gitpython.readthedocs.io/en/stable/reference.html#git.remote.PushInfo
 
-    return res.status_code(200)
+    return res
 
 
-def push_github_repo_to_gitlab(github_repo: Repo, gitlab_url) -> [PushInfo]:
+def push_github_repo_to_gitlab(github_repo: Repo, gitlab_url: str) -> [PushInfo]:
     """
 
     :param github_repo:
@@ -69,8 +77,8 @@ def push_github_repo_to_gitlab(github_repo: Repo, gitlab_url) -> [PushInfo]:
              See: http://gitpython.readthedocs.io/en/stable/reference.html#git.remote.Remote.push
     """
 
-    gitlab_repo = Remote.add(github_repo, 'gitlab', gitlab_url)
-    return gitlab_repo.push()
+    gitlab_remote = Remote.create(github_repo, 'gitlab', gitlab_url)
+    return gitlab_remote.push()
 
 
 def create_server() -> Bottle:
