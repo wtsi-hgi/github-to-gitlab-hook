@@ -56,7 +56,7 @@ def handle_github_push_request(req: LocalRequest, res: LocalResponse):
     message = json.loads(req.json)
     repo_name = message["repository"]["name"]
     if repo_name not in github_repos:
-        bottle.abort(404, "Repo not under GitLib")
+        bottle.abort(400, "Repo not under GitLib")
 
     # Do the hard work of syncing.
     sync_github_repo_to_gitlab(repo_name, message["repository"]["url"], config["gitlab_url"])
@@ -80,12 +80,14 @@ def sync_github_repo_to_gitlab(repo_name: str, github_repo_url, gitlab_domain_ur
     # Create a temp directory to clone the repo to:
     with tempfile.TemporaryDirectory() as temp_dir:
         local_repo = Repo.clone_from(github_repo_url, temp_dir)
-        gitlab_remote = local_repo.create_remote('gitlab', gitlab_domain_url + repo_name)
+        gitlab_repo = os.path.join(gitlab_domain_url, repo_name)
+        gitlab_remote = local_repo.create_remote('gitlab', gitlab_repo) # FIXME URL join?
         assert gitlab_remote.exists()
-        gitlab_remote.fetch()
+        #gitlab_remote.fetch()
 
-        local_repo.commit()
-    return gitlab_remote.push()
+        #local_repo.commit()
+        print("pushing to gitlab remote %s\n" % gitlab_remote)
+        return gitlab_remote.push()
 
 
 def create_server() -> Bottle:

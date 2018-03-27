@@ -4,6 +4,7 @@ import os
 import json
 import requests
 import server
+import time
 from tempfile import TemporaryDirectory
 from git import Repo
 
@@ -21,42 +22,38 @@ class TestEntrypoint(unittest.TestCase):
         self.server_controller.start()
 
         # Set up two git remotes to act as test GitHub and GitLab.
-        self.github_temp_dir = TemporaryDirectory()
-        self.github_remote = Repo.init(self.github_temp_dir.name, bare=True)
-        assert self.github_remote.bare
-
-        self.gitlab_temp_dir = TemporaryDirectory()
-        self.gitlab_remote = Repo.init(self.gitlab_temp_dir.name, bare=True)
-        assert self.gitlab_remote.bare
+        self.github_temp_dir = TemporaryDirectory(prefix="github-repo-")
+        self.gitlab_temp_dir = TemporaryDirectory(prefix="gitlab-repo-")
 
     def tearDown(self):
         self.server_controller.stop()
         self.github_temp_dir.cleanup()
         self.gitlab_temp_dir.cleanup()
 
-    def create_clone_repo_with_readme(self, url_of_repo_to_clone: str, location_of_clone: str):
-        """
-        This creates a clone of a remote so it can be used to pull and push easily.  It adds a README.txt so
-        a change of state can be committed and pushed to the remote.
+    def create_bare_repo(self, location: str, name: str):
+        repo_path = os.path.join(location, name)
+        repo = Repo.init(repo_path, bare=True)
+        assert repo.bare
+        return repo_path
 
-        :param url_of_repo_to_clone: can be a local git repo
-        :param location_of_clone: can also be a local directory
-        :return: a Bottle repository object for the cloned repo.
-        """
-        clone = Repo.clone_from(url_of_repo_to_clone, location_of_clone)
-        assert clone.remotes['origin'].exists()
-        clone.remotes['origin'].fetch()
+    def add_readme(self, repo: str):
+        with TemporaryDirectory() as location_of_clone:
+            clone = Repo.clone_from(repo, location_of_clone)
+            assert clone.remotes['origin'].exists()
+            clone.remotes['origin'].fetch() # needed?
 
-        # Create a file in the cloned repo.
-        new_file_path = os.path.join(location_of_clone, "README.txt")
-        with open(new_file_path, 'w') as file:
-            file.write("Hello world")
+            # Create a file in the cloned repo.
+            new_file_path = os.path.join(location_of_clone, "README.txt")
 
-        # Add and commit the new file.
-        clone.index.add([new_file_path])
-        clone.index.commit("Adding README.txt")
-        clone.commit()
-        clone.remotes['origin'].push()
+            with open(new_file_path, 'w') as file:
+                file.write("Hello world")
+
+            # Add and commit the new file.
+            clone.index.add([new_file_path])
+            clone.index.commit("Adding README.txt")
+            clone.commit()
+            clone.remotes['origin'].push()
+
 
     def test_sync_github_to_gitlab(self):
         """
@@ -65,23 +62,26 @@ class TestEntrypoint(unittest.TestCase):
 
         :return:
         """
-
-        with TemporaryDirectory() as temp_dir:
-            # Intitalise a temp clone and push a readme to the GitHub test remote.
-            self.create_clone_repo_with_readme(self.github_temp_dir.name, temp_dir)
+        test_repo_name = "testrepo"
+        github_repo = self.create_bare_repo(self.github_temp_dir.name, test_repo_name)
+        gitlab_repo = self.create_bare_repo(self.gitlab_temp_dir.name, test_repo_name)
+        self.add_readme(github_repo)
 
         # Load test config to point to local test repos
         server.entrypoint.load_config = MagicMock(return_value={
-            "github_repos": [self.github_temp_dir.name],
+            "github_repos": [test_repo_name],
             "gitlab_url": self.gitlab_temp_dir.name
         })
 
         # JSON to use in the HTML request to the server.
-        data = json.dumps({"repository": {"name": self.github_temp_dir.name, "url": self.gitlab_temp_dir.name}})
-
+        #data = json.dumps({"repository": {"name": self.github_temp_dir.name, "url": self.gitlab_temp_dir.name}})
+        data = json.dumps({"repository": {"name": test_repo_name, "url": github_repo}})
+        print("test request to server with data=%s" % data)
         # Capture and test the response.
         response = requests.post(self.server_controller.url, json=data,
                                  headers={'content-type': 'application/json'})
+
+
         self.assertEqual(200, response.status_code)
         # Todo: check that readme has successful passed from GitHub test repo to GitLab test repo.
 

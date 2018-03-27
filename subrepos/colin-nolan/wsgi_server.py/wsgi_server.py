@@ -60,7 +60,7 @@ class WsgiServerController:
         """
         if not self.running:
             raise ServerStateError("Server is not running")
-        return f"http://{self.host}:{self.port}"
+        return 'http://{host}:{port}'.format(host=self.host, port=self.port)
 
     @property
     def running(self) -> bool:
