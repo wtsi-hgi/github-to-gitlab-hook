@@ -103,10 +103,10 @@ def create_server() -> Bottle:
     return app
 
 
-def run_server():
+def main():
     server = create_server()
     server_controller = WsgiServerController(server, port=8080)
     server_controller.run()
 
 if __name__ == "__main___":
-    run_server()
+    main()
