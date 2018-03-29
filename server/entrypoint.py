@@ -23,11 +23,13 @@ import tempfile
 import bottle
 from git import Repo, Remote, PushInfo
 from bottle import Bottle, LocalRequest, LocalResponse, response, request
+from typing import List
+import argparse
 
 from server.wsgi_server import WsgiServerController
 
 
-def load_config(path: os.path):
+def load_config(path: str):
     """
     Loads a json file used for config.  Handy to have the function separated for testing purposes.
 
@@ -38,7 +40,7 @@ def load_config(path: os.path):
 
 
 # The following functions are route handling for a local Bottle application.
-def handle_github_push_request(req: LocalRequest, res: LocalResponse):
+def handle_github_push_request(req: LocalRequest, res: LocalResponse) -> LocalResponse:
     """
     This checks the contents of the repositories_to_sync.json config file against the HTML request contents,
     specifically the name of the repo in the request, and if present, call the function to handle between github
@@ -52,8 +54,11 @@ def handle_github_push_request(req: LocalRequest, res: LocalResponse):
     config = load_config(os.path.join(os.path.dirname(__file__), "../repositories_to_sync.json"))
     github_repos = config["github_repos"]
 
+    if req.json is None:
+        bottle.abort(400, "Request body is not JSON.")
+
     # Check if message relates to a repo that should be synced.
-    message = json.loads(req.json)
+    message = req.json
     repo_name = message["repository"]["name"]
     if repo_name not in github_repos:
         bottle.abort(400, "Repo not under GitLib")
@@ -64,7 +69,7 @@ def handle_github_push_request(req: LocalRequest, res: LocalResponse):
     return res
 
 
-def sync_github_repo_to_gitlab(repo_name: str, github_repo_url, gitlab_domain_url) -> [PushInfo]:
+def sync_github_repo_to_gitlab(repo_name: str, github_repo_url, gitlab_domain_url) -> None:
     """
     Create a temporary clone of the GitHub repo and set a remote to push to the associated GitLab repo.
 
@@ -75,19 +80,26 @@ def sync_github_repo_to_gitlab(repo_name: str, github_repo_url, gitlab_domain_ur
              See: http://gitpython.readthedocs.io/en/stable/reference.html#git.remote.Remote.push
     """
 
-    # Todo: get this to work with GitPython.  Failing that maybe use subprocess.
-
     # Create a temp directory to clone the repo to:
     with tempfile.TemporaryDirectory() as temp_dir:
         local_repo = Repo.clone_from(github_repo_url, temp_dir)
         gitlab_repo = os.path.join(gitlab_domain_url, repo_name)
         gitlab_remote = local_repo.create_remote('gitlab', gitlab_repo) # FIXME URL join?
         assert gitlab_remote.exists()
-        #gitlab_remote.fetch()
 
-        #local_repo.commit()
         print("pushing to gitlab remote %s\n" % gitlab_remote)
-        return gitlab_remote.push()
+        push_infos = gitlab_remote.push()
+
+        push_errors = []
+
+        for push_info in push_infos:
+            if push_info.flags & PushInfo.ERROR:
+                push_errors.append(f"Pushing to {push_info.remote_ref} failed: {push_info.summary}")
+
+        if push_errors:
+            errors_str = "\n".join(push_errors)
+            bottle.abort(500, f"Failed to push to GitLab.\n{errors_str}")
+
 
 
 def create_server() -> Bottle:
@@ -105,7 +117,7 @@ def create_server() -> Bottle:
 
 def main():
     server = create_server()
-    server_controller = WsgiServerController(server, port=8080)
+    server_controller = WsgiServerController(server, port=8080, host="0.0.0.0")
     server_controller.run()
 
 if __name__ == "__main___":
