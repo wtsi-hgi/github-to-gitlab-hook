@@ -17,7 +17,7 @@ class TestEntrypoint(unittest.TestCase):
     def setUp(self):
 
         # Create the server and a controller to help start up and shutdown processes.
-        test_server = create_server()
+        test_server = create_server("/dev/null") # NOTE: the location of this will be patched later
         self.server_controller = WsgiServerController(test_server)
         self.server_controller.start()
 
@@ -78,7 +78,7 @@ class TestEntrypoint(unittest.TestCase):
         data = json.dumps({"repository": {"name": test_repo_name, "url": github_repo}})
         print("test request to server with data=%s" % data)
         # Capture and test the response.
-        response = requests.post(self.server_controller.url, json=data,
+        response = requests.post(self.server_controller.url, data=data,
                                  headers={'content-type': 'application/json'})
 
 

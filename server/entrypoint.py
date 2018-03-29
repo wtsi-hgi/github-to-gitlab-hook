@@ -40,7 +40,7 @@ def load_config(path: str):
 
 
 # The following functions are route handling for a local Bottle application.
-def handle_github_push_request(req: LocalRequest, res: LocalResponse) -> LocalResponse:
+def handle_github_push_request(req: LocalRequest, res: LocalResponse, options_file: str) -> LocalResponse:
     """
     This checks the contents of the repositories_to_sync.json config file against the HTML request contents,
     specifically the name of the repo in the request, and if present, call the function to handle between github
@@ -51,7 +51,7 @@ def handle_github_push_request(req: LocalRequest, res: LocalResponse) -> LocalRe
     """
 
     # Find which Github repos should be synced.
-    config = load_config(os.path.join(os.path.dirname(__file__), "../repositories_to_sync.json"))
+    config = load_config(options_file)
     github_repos = config["github_repos"]
 
     if req.json is None:
@@ -102,7 +102,7 @@ def sync_github_repo_to_gitlab(repo_name: str, github_repo_url, gitlab_domain_ur
 
 
 
-def create_server() -> Bottle:
+def create_server(options_file) -> Bottle:
     """
     Create the local Bottle app and assign routes.
 
@@ -110,14 +110,20 @@ def create_server() -> Bottle:
     """
 
     app = Bottle()
-    app.route(path="/", method="POST", callback=lambda: handle_github_push_request(request, response))
+    app.route(path="/", method="POST", callback=lambda: handle_github_push_request(request, response, options_file))
 
     return app
 
 
 def main():
-    server = create_server()
-    server_controller = WsgiServerController(server, port=8080, host="0.0.0.0")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", default=8080, type=int)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--options-file", default="./repositories_to_sync.json")
+    opts = parser.parse_args()
+
+    server = create_server(opts.options_file)
+    server_controller = WsgiServerController(server, port=opts.port, host=opts.host)
     server_controller.run()
 
 if __name__ == "__main___":
