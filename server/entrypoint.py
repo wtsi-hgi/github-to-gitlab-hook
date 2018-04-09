@@ -138,7 +138,7 @@ def main():
     opts = parser.parse_args()
 
     if opts.mattermost_webhook_url is not None:
-        mm_handler = mattermost_log_handler.MattermostLogHandler(opts.mattermost_webhook_url)
+        mm_handler = mattermost_log_handler.MattermostLogHandler(opts.mattermost_webhook_url, username="Github to Gitlab logs")
         mm_handler.setLevel(logging.DEBUG)
         logging.getLogger().addHandler(mm_handler)
 
