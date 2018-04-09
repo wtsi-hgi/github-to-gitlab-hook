@@ -78,6 +78,8 @@ def handle_github_push_request(req: LocalRequest, res: LocalResponse, options_fi
         if http_error.status_code >= 400:
             logger.warn(f"Emitting http error {http_error.status_code}: {http_error.body}")
 
+        raise
+
     return res
 
 
