@@ -3,13 +3,13 @@ from unittest.mock import MagicMock
 import os
 import json
 import requests
-import server
+import github2gitlab
 import time
 from tempfile import TemporaryDirectory
 from git import Repo
 
-from server.entrypoint import create_server
-from server.wsgi_server import WsgiServerController
+from github2gitlab import create_server
+from github2gitlab.wsgi_server import WsgiServerController
 
 
 class TestEntrypoint(unittest.TestCase):
@@ -68,7 +68,7 @@ class TestEntrypoint(unittest.TestCase):
         self.add_readme(github_repo)
 
         # Load test config to point to local test repos
-        server.entrypoint.load_config = MagicMock(return_value={
+        github2gitlab.load_config = MagicMock(return_value={
             "github_repos": [test_repo_name],
             "gitlab_url": self.gitlab_temp_dir.name
         })

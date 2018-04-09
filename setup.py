@@ -9,7 +9,7 @@ except ImportError:
         return open(file, "r").read()
 
 
-setup(name="git-to-gitlab-hook",
+setup(name="github2gitlab",
       version="1.0.0",
       description="Webhook to sync Github repos to internal Gitlab repos",
       url="https://github.com/wtsi-hgi/github-to-gitlab-hook",
@@ -20,7 +20,7 @@ setup(name="git-to-gitlab-hook",
       install_requires=open("requirements.txt", "r").readlines(),
       entry_points={
           "console_scripts": [
-              "git-to-gitlab-hook=server.entrypoint:main"
+              "github2gitlab=github2gitlab"
           ]
       },
       zip_safe=True)

@@ -30,8 +30,6 @@ import requests
 from bottle import Bottle, LocalRequest, LocalResponse, request, response
 from git import PushInfo, Remote, Repo
 
-from server.wsgi_server import WsgiServerController
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -58,7 +56,7 @@ def handle_github_push_request(req: LocalRequest, res: LocalResponse, options_fi
     :param res: the Bottle.response which is the current response being handled by the server.
     """
     try:
-        if req.headers["X-GitHub-Event"] != "push":
+        if req.headers.get("X-GitHub-Event", None) != "push":
             return res
 
         # Find which Github repos should be synced.
