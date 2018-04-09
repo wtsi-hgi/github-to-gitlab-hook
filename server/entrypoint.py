@@ -131,7 +131,7 @@ def main():
     parser.add_argument("--mattermost-webhook-url")
     opts = parser.parse_args()
 
-    if opts.mattermost_url is not None:
+    if opts.mattermost_webhook_url is not None:
         mm_handler = mattermost_log_handler.MattermostLogHandler(opts.mattermost_webhook_url)
         mm_handler.setLevel(logging.DEBUG)
         logging.getLogger().addHandler(mm_handler)
