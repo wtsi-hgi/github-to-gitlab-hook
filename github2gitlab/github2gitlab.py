@@ -48,7 +48,7 @@ def load_config(path: str):
 # The following functions are route handling for a local Bottle application.
 def handle_github_push_request(req: LocalRequest, res: LocalResponse, options_file: str) -> LocalResponse:
     """
-    This checks the contents of the repositories_to_sync.json config file against the HTML request contents,
+    This checks the contents of the config.json config file against the HTML request contents,
     specifically the name of the repo in the request, and if present, call the function to handle between github
     and gitlab.
 
@@ -131,7 +131,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", default=8080, type=int)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--options-file", default="./repositories_to_sync.json")
+    parser.add_argument("--options-file", default="./config.json")
     parser.add_argument("--mattermost-webhook-url")
     opts = parser.parse_args()
 
