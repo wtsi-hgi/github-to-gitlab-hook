@@ -17,17 +17,23 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 """
 Entry point for the handling of GitHub pushes.
 """
+import argparse
 import json
+import logging
 import os
 import tempfile
-import bottle
-from git import Repo, Remote, PushInfo
-from bottle import Bottle, LocalRequest, LocalResponse, response, request
 from typing import List
-import argparse
+
+import bottle
+import mattermost_log_handler
+import requests
+from bottle import Bottle, LocalRequest, LocalResponse, request, response
+from git import PushInfo, Remote, Repo
 
 from server.wsgi_server import WsgiServerController
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 def load_config(path: str):
     """
@@ -49,6 +55,8 @@ def handle_github_push_request(req: LocalRequest, res: LocalResponse, options_fi
     :param req: the Bottle.request which is the current request being handled by the server.
     :param res: the Bottle.response which is the current response being handled by the server.
     """
+    if req.headers["X-GitHub-Event"] != "push":
+        return res
 
     # Find which Github repos should be synced.
     config = load_config(options_file)
@@ -61,10 +69,10 @@ def handle_github_push_request(req: LocalRequest, res: LocalResponse, options_fi
     message = req.json
     repo_name = message["repository"]["name"]
     if repo_name not in github_repos:
-        bottle.abort(400, "Repo not under GitLib")
+        bottle.abort(400, f"Repo {repo_name} not under GitLab")
 
     # Do the hard work of syncing.
-    sync_github_repo_to_gitlab(repo_name, message["repository"]["url"], config["gitlab_url"])
+    sync_github_repo_to_gitlab(repo_name, message["repository"]["ssh_url"], config["gitlab_url"])
 
     return res
 
@@ -120,11 +128,16 @@ def main():
     parser.add_argument("--port", default=8080, type=int)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--options-file", default="./repositories_to_sync.json")
+    parser.add_argument("--mattermost-webhook-url")
     opts = parser.parse_args()
 
-    server = create_server(opts.options_file)
-    server_controller = WsgiServerController(server, port=opts.port, host=opts.host)
-    server_controller.run()
+    if opts.mattermost_url is not None:
+        mm_handler = mattermost_log_handler.MattermostLogHandler(opts.mattermost_webhook_url)
+        mm_handler.setLevel(logging.DEBUG)
+        logging.getLogger().addHandler(mm_handler)
 
-if __name__ == "__main___":
+    server = create_server(opts.options_file)
+    server.run(server="tornado", port=opts.port, host=opts.host)
+
+if __name__ == "__main__":
     main()
