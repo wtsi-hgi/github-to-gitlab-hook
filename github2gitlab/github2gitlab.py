@@ -32,6 +32,7 @@ from git import PushInfo, Remote, Repo
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.StreamHandler())
 
 logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 
