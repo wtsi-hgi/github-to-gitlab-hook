@@ -35,6 +35,8 @@ from server.wsgi_server import WsgiServerController
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
+
 def load_config(path: str):
     """
     Loads a json file used for config.  Handy to have the function separated for testing purposes.
@@ -55,24 +57,28 @@ def handle_github_push_request(req: LocalRequest, res: LocalResponse, options_fi
     :param req: the Bottle.request which is the current request being handled by the server.
     :param res: the Bottle.response which is the current response being handled by the server.
     """
-    if req.headers["X-GitHub-Event"] != "push":
-        return res
+    try:
+        if req.headers["X-GitHub-Event"] != "push":
+            return res
 
-    # Find which Github repos should be synced.
-    config = load_config(options_file)
-    github_repos = config["github_repos"]
+        # Find which Github repos should be synced.
+        config = load_config(options_file)
+        github_repos = config["github_repos"]
 
-    if req.json is None:
-        bottle.abort(400, "Request body is not JSON.")
+        if req.json is None:
+            bottle.abort(400, "Request body is not JSON.")
 
-    # Check if message relates to a repo that should be synced.
-    message = req.json
-    repo_name = message["repository"]["name"]
-    if repo_name not in github_repos:
-        bottle.abort(400, f"Repo {repo_name} not under GitLab")
+        # Check if message relates to a repo that should be synced.
+        message = req.json
+        repo_name = message["repository"]["name"]
+        if repo_name not in github_repos:
+            bottle.abort(400, f"Repo {repo_name} not under GitLab")
 
-    # Do the hard work of syncing.
-    sync_github_repo_to_gitlab(repo_name, message["repository"]["ssh_url"], config["gitlab_url"])
+        # Do the hard work of syncing.
+        sync_github_repo_to_gitlab(repo_name, message["repository"]["ssh_url"], config["gitlab_url"])
+    except bottle.HTTPError as http_error:
+        if http_error.status_code >= 400:
+            logger.warn(f"Emitting http error {http_error.status_code}: {http_error.body}")
 
     return res
 
