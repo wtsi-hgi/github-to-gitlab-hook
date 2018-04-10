@@ -1,0 +1,6 @@
+bottle==0.12.13
+gitdb2==2.0.3
+GitPython==2.1.9
+smmap2==2.0.3
+mattermost-log-handler==0.0.2
+tornado==5.0.2
