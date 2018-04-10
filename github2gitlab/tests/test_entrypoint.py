@@ -64,7 +64,7 @@ class TestEntrypoint(unittest.TestCase):
         """
         test_repo_name = "testrepo"
         github_repo = self.create_bare_repo(self.github_temp_dir.name, test_repo_name)
-        gitlab_repo = self.create_bare_repo(self.gitlab_temp_dir.name, test_repo_name)
+        self.create_bare_repo(self.gitlab_temp_dir.name, test_repo_name)
         self.add_readme(github_repo)
 
         # Load test config to point to local test repos

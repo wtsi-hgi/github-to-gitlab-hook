@@ -20,7 +20,7 @@ setup(name="github2gitlab",
       install_requires=open("requirements.txt", "r").readlines(),
       entry_points={
           "console_scripts": [
-              "github2gitlab=github2gitlab"
+              "github2gitlab=github2gitlab.entrypoint:main"
           ]
       },
       zip_safe=True)

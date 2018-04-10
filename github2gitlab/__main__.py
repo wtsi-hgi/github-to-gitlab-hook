@@ -1,2 +1,2 @@
-from .github2gitlab import main
+from .entrypoint import main
 main()

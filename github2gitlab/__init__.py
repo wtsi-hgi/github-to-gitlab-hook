@@ -1,1 +1,1 @@
-from .github2gitlab import *
+from .entrypoint import *
