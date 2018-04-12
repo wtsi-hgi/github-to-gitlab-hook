@@ -17,7 +17,7 @@ with this program. If not, see <http://www.gnu.org/licenses/>.
 """
 Entry point for the handling of GitHub pushes.
 """
-import argparse
+import configargparse
 import json
 import logging
 import os
@@ -132,10 +132,11 @@ def create_server(gitlab_base_url) -> Bottle:
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = configargparse.ArgumentParser()
     parser.add_argument("--port", default=8080, type=int)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--gitlab-base-url", help="Base URL to route sync all repositories to", required=True)
+    parser.add_argument("--config-file", is_config_file=True, help="Config file for the options below. (dashes should be underscores).")
+    parser.add_argument("--gitlab-base-url", required=True, help="Base URL to sync all repositories to.")
     parser.add_argument("--mattermost-webhook-url", help="If set, sets the mattermost webhook endpoint to send logs to.")
     opts = parser.parse_args()
 
