@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.StreamHandler())
 
-logging.getLogger("tornado.access").setLevel(logging.CRITICAL)
 
 def load_config(path: str):
     """
@@ -45,9 +44,17 @@ def load_config(path: str):
         json_config = json.load(file)
     return json_config
 
+def get_ghgl_response(status_code, message):
+    return bottle.HTTPResponse(
+        body=json.dumps({
+            "message": message
+        }),
+        status=status_code
+    )
+
 
 # The following functions are route handling for a local Bottle application.
-def handle_github_push_request(req: LocalRequest, res: LocalResponse, options_file: str) -> LocalResponse:
+def handle_github_push_request(req: LocalRequest, res: LocalResponse, gitlab_base_url: str) -> LocalResponse:
     """
     This checks the contents of the config.json config file against the HTML request contents,
     specifically the name of the repo in the request, and if present, call the function to handle between github
@@ -56,41 +63,28 @@ def handle_github_push_request(req: LocalRequest, res: LocalResponse, options_fi
     :param req: the Bottle.request which is the current request being handled by the server.
     :param res: the Bottle.response which is the current response being handled by the server.
     """
-    try:
-        if req.headers.get("X-GitHub-Event", None) != "push":
-            return res
+    if req.headers.get("X-GitHub-Event", None) != "push":
+        return get_ghgl_response(200, "No action. Event is not a push event.")
 
-        # Find which Github repos should be synced.
-        config = load_config(options_file)
-        github_repos = config["github_repos"]
+    if req.json is None:
+        logger.error("Cannot parse request body as JSON.")
+        return get_ghgl_response(400, "Can't proceed. Request body is not JSON.")
 
-        if req.json is None:
-            bottle.abort(400, "Request body is not JSON.")
+    # Check if message relates to a repo that should be synced.
+    message = req.json
+    repo_name = message["repository"]["name"]
 
-        # Check if message relates to a repo that should be synced.
-        message = req.json
-        repo_name = message["repository"]["name"]
-        if repo_name not in github_repos:
-            bottle.abort(400, f"Repo {repo_name} not under GitLab")
-
-        # Do the hard work of syncing.
-        sync_github_repo_to_gitlab(repo_name, message["repository"]["ssh_url"], config["gitlab_url"])
-    except bottle.HTTPError as http_error:
-        if http_error.status_code >= 400:
-            logger.warn(f"Emitting http error {http_error.status_code}: {http_error.body}")
-
-        raise
-
-    return res
+    # Do the hard work of syncing.
+    return sync_github_repo_to_gitlab(repo_name, message["repository"]["clone_url"], gitlab_base_url)
 
 
-def sync_github_repo_to_gitlab(repo_name: str, github_repo_url, gitlab_domain_url) -> None:
+def sync_github_repo_to_gitlab(repo_name: str, github_repo_url: str, gitlab_base_url: str) -> None:
     """
     Create a temporary clone of the GitHub repo and set a remote to push to the associated GitLab repo.
 
     :param repo_name: the name of the repo from GitHub which should match an associated GitLab repo.
     :param github_repo_url: the location of the GitHub repo.
-    :param gitlab_domain_url: the location of the GitLab domain where all the repos are.
+    :param gitlab_base_url: the location of the GitLab domain where all the repos are.
     :return: Iterable list of push information.
              See: http://gitpython.readthedocs.io/en/stable/reference.html#git.remote.Remote.push
     """
@@ -98,11 +92,11 @@ def sync_github_repo_to_gitlab(repo_name: str, github_repo_url, gitlab_domain_ur
     # Create a temp directory to clone the repo to:
     with tempfile.TemporaryDirectory() as temp_dir:
         local_repo = Repo.clone_from(github_repo_url, temp_dir)
-        gitlab_repo = os.path.join(gitlab_domain_url, repo_name)
+        gitlab_repo = os.path.join(gitlab_base_url, repo_name)
         gitlab_remote = local_repo.create_remote('gitlab', gitlab_repo) # FIXME URL join?
         assert gitlab_remote.exists()
 
-        print("pushing to gitlab remote %s\n" % gitlab_remote)
+        logger.info("attempting to sync to gitlab remote %s\n" % gitlab_repo)
         push_infos = gitlab_remote.push()
 
         push_errors = []
@@ -113,11 +107,13 @@ def sync_github_repo_to_gitlab(repo_name: str, github_repo_url, gitlab_domain_ur
 
         if push_errors:
             errors_str = "\n".join(push_errors)
-            bottle.abort(500, f"Failed to push to GitLab.\n{errors_str}")
+            error_text = f"Failed to push to GitLab.\n{errors_str}"
+            logger.error(error_text)
+            return get_ghgl_response(500, error_text)
 
+        return get_ghgl_response(201, "Repository synced.")
 
-
-def create_server(options_file) -> Bottle:
+def create_server(gitlab_base_url) -> Bottle:
     """
     Create the local Bottle app and assign routes.
 
@@ -125,7 +121,7 @@ def create_server(options_file) -> Bottle:
     """
 
     app = Bottle()
-    app.route(path="/", method="POST", callback=lambda: handle_github_push_request(request, response, options_file))
+    app.route(path="/", method="POST", callback=lambda: handle_github_push_request(request, response, gitlab_base_url))
 
     return app
 
@@ -134,16 +130,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", default=8080, type=int)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--options-file", default="./config.json")
-    parser.add_argument("--mattermost-webhook-url")
+    parser.add_argument("--gitlab-base-url", help="Base URL to route sync all repositories to", required=True)
+    parser.add_argument("--mattermost-webhook-url", help="If set, sets the mattermost webhook endpoint to send logs to.")
     opts = parser.parse_args()
 
     if opts.mattermost_webhook_url is not None:
         mm_handler = mattermost_log_handler.MattermostLogHandler(opts.mattermost_webhook_url, username="Github to Gitlab logs")
-        mm_handler.setLevel(logging.DEBUG)
+        mm_handler.setLevel(logging.WARNING)
         logging.getLogger().addHandler(mm_handler)
 
-    server = create_server(opts.options_file)
+    server = create_server(opts.gitlab_base_url)
     server.run(server="tornado", port=opts.port, host=opts.host)
 
 if __name__ == "__main__":

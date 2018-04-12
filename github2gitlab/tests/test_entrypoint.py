@@ -15,15 +15,14 @@ from github2gitlab.wsgi_server import WsgiServerController
 class TestEntrypoint(unittest.TestCase):
 
     def setUp(self):
-
-        # Create the server and a controller to help start up and shutdown processes.
-        test_server = create_server("/dev/null") # NOTE: the location of this will be patched later
-        self.server_controller = WsgiServerController(test_server)
-        self.server_controller.start()
-
-        # Set up two git remotes to act as test GitHub and GitLab.
+        # Set up two directories to act as test GitHub and GitLab.
         self.github_temp_dir = TemporaryDirectory(prefix="github-repo-")
         self.gitlab_temp_dir = TemporaryDirectory(prefix="gitlab-repo-")
+
+        # Create the server and a controller to help start up and shutdown processes.
+        test_server = create_server(self.gitlab_temp_dir.name)
+        self.server_controller = WsgiServerController(test_server)
+        self.server_controller.start()
 
     def tearDown(self):
         self.server_controller.stop()
@@ -67,23 +66,30 @@ class TestEntrypoint(unittest.TestCase):
         self.create_bare_repo(self.gitlab_temp_dir.name, test_repo_name)
         self.add_readme(github_repo)
 
-        # Load test config to point to local test repos
-        github2gitlab.load_config = MagicMock(return_value={
-            "github_repos": [test_repo_name],
-            "gitlab_url": self.gitlab_temp_dir.name
+        # JSON to use in the HTML request to the server.
+        data = json.dumps({
+            "repository": {
+                "name": test_repo_name,
+                "clone_url": github_repo
+            }
         })
 
-        # JSON to use in the HTML request to the server.
-        #data = json.dumps({"repository": {"name": self.github_temp_dir.name, "url": self.gitlab_temp_dir.name}})
-        data = json.dumps({"repository": {"name": test_repo_name, "url": github_repo}})
-        print("test request to server with data=%s" % data)
         # Capture and test the response.
-        response = requests.post(self.server_controller.url, data=data,
-                                 headers={'content-type': 'application/json'})
+        response = requests.post(
+            self.server_controller.url,
+            data=data,
+            headers={
+                'content-type': 'application/json',
+                "X-GitHub-Event": "push"
+            }
+        )
 
-
-        self.assertEqual(200, response.status_code)
-        # Todo: check that readme has successful passed from GitHub test repo to GitLab test repo.
+        self.assertEqual(201, response.status_code)
+        # assert a master branch exists (would happen after the sync)
+        self.assertTrue(
+            os.path.isfile(os.path.join(self.gitlab_temp_dir.name, test_repo_name, "refs", "heads", "master")),
+            f"No master branch exists in test repo {github_repo}"
+        )
 
 
 if __name__ == '__main__':
