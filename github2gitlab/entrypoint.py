@@ -119,9 +119,14 @@ def create_server(gitlab_base_url) -> Bottle:
 
     :return: Instance of bottle with defined routes.
     """
+    def handle_bottle_request():
+        try:
+            return handle_github_push_request(request, response, gitlab_base_url)
+        except Exception as exp:
+            logger.exception(exp)
 
     app = Bottle()
-    app.route(path="/", method="POST", callback=lambda: handle_github_push_request(request, response, gitlab_base_url))
+    app.route(path="/", method="POST", callback=handle_bottle_request)
 
     return app
 
