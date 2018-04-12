@@ -5,3 +5,4 @@ smmap2==2.0.3
 mattermost-log-handler==0.0.2
 tornado==5.0.2
 ConfigArgParse==0.13.0
+bumpversion==0.5.3
