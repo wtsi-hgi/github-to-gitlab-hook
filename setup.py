@@ -10,7 +10,7 @@ except ImportError:
 
 
 setup(name="github2gitlab",
-      version="0.3.0",
+      version="0.4.0",
       description="Webhook to sync Github repos to internal Gitlab repos",
       url="https://github.com/wtsi-hgi/github-to-gitlab-hook",
       author="Elizabeth Weatherill",
