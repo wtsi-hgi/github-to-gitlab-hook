@@ -28,7 +28,8 @@ import bottle
 import mattermost_log_handler
 import requests
 from bottle import Bottle, LocalRequest, LocalResponse, request, response
-from git import PushInfo, Remote, Repo
+from git import PushInfo, Remote, Repo, GitCommandError
+import git
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -93,13 +94,23 @@ def sync_github_repo_to_gitlab(repo_name: str, github_repo_url: str, gitlab_base
     with tempfile.TemporaryDirectory() as temp_dir:
         local_repo = Repo.clone_from(github_repo_url, temp_dir)
         gitlab_repo = os.path.join(gitlab_base_url, repo_name)
-        gitlab_remote = local_repo.create_remote('gitlab', gitlab_repo) # FIXME URL join?
-        assert gitlab_remote.exists()
+        gitlab_remote = local_repo.create_remote('gitlab', gitlab_repo)
+
+        g = git.cmd.Git()
+        try:
+            g.ls_remote(gitlab_repo)
+        except GitCommandError:
+            logger.exception(f"Corresponding GitLab repo {gitlab_repo} not found")
+            return get_ghgl_response(500, f"Corresponding GitLab repo {gitlab_repo} not found.")
 
         logger.info("attempting to sync to gitlab remote %s\n" % gitlab_repo)
         push_infos = gitlab_remote.push()
 
         push_errors = []
+
+        if len(push_infos) == 0:
+            logger.error(f"Failed to push to GitLab repo {gitlab_repo}")
+            return get_ghgl_response(500, f"Failed to push to GitLab repo {gitlab_repo}")
 
         for push_info in push_infos:
             if push_info.flags & PushInfo.ERROR:
@@ -123,7 +134,8 @@ def create_server(gitlab_base_url) -> Bottle:
         try:
             return handle_github_push_request(request, response, gitlab_base_url)
         except Exception as exp:
-            logger.exception(exp)
+            logger.exception("Exception in routing to endpoint")
+            raise exp
 
     app = Bottle()
     app.route(path="/", method="POST", callback=handle_bottle_request)
